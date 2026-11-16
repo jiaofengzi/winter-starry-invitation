@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>冬季星空 · 礼物交换</title>
+<title>2026 圣诞礼物交换</title>
 <style>
 :root{--ink:#e6f0ff;--dim:#8fb0ee;--line:#7fb2ff;--night:#030818;--pane:rgba(3,9,30,.86);--accent:#ff5a4d;--gold:#ffd27a}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -122,7 +122,7 @@ ol li::before{content:"0" counter(n);position:absolute;left:0;color:var(--line)}
   <header class="stop" id="hero">
     <div>
       <p class="boot">&gt; 收到一段来自 M16 的讯号<br>&gt; 解码完成 · <span id="ed"></span></p>
-      <h1><span class="pxt" data-px="16">冬季星空</span><span class="pxt" data-px="16">礼物交换</span></h1>
+      <h1 aria-label="2026 圣诞礼物交换"><span class="pxt" data-px="16">2026 圣诞礼物交换</span></h1>
       <p class="sub" id="sub"></p>
     </div>
     <div id="cue">▼ 向下滑动 · 返航</div>
@@ -286,6 +286,9 @@ async function loadSound() {
       const src = buf.getChannelData(c), out = lp.getChannelData(c);
       for (let i = 0; i < L - X; i++) { if (i < X) { const th = i / X * Math.PI / 2; out[i] = src[s0 + i] * Math.sin(th) + src[s0 + L - X + i] * Math.cos(th); } else out[i] = src[s0 + i]; }
     }
+    const boxAudio = await fetch(BOX.src);
+    if (!boxAudio.ok) throw new Error('Music box audio unavailable');
+    SND.boxBuf = await ctx.decodeAudioData(await boxAudio.arrayBuffer());
     SND.ctx = ctx; SND.buf = buf; SND.loopBuf = lp;
     SND.master = ctx.createGain(); SND.master.gain.value = BGM.volume; SND.master.connect(ctx.destination);
     startDrone();
@@ -323,35 +326,26 @@ function begin() {
   }
   mode = 'run';
 }
-/* 八音盒：自己合成的一小段原创旋律（C 大调，三拍子，八小节循环），不用任何音频文件。
-   起初极慢、极轻，几乎注意不到；随着雪景收成雪花球、桌子浮现，一点点加快、变响；
-   镜头停稳后落到正常状态——仍然很稀：一拍 1.3 秒，低音只在每小节第一拍。 */
-const BOX = { slow: 3.4, beat: 1.3, quiet: .035, vol: .42,
-  ev: [[0, 76, 1], [0, 60, 0], [1, 79, 1], [2, 84, 1], [3, 83, 1], [3, 57, 0], [4.5, 81, 1], [5, 76, 1], [6, 77, 1], [6, 53, 0], [7, 81, 1], [8, 84, 1], [9, 83, 1], [9, 55, 0], [10, 79, 1], [11, 74, 1],
-    [12, 76, 1], [12, 60, 0], [13, 79, 1], [14, 88, 1], [15, 86, 1], [15, 52, 0], [16, 83, 1], [17, 79, 1], [18, 81, 1], [18, 53, 0], [19, 84, 1], [20, 77, 1], [21, 79, 1], [21, 55, 0], [22, 74, 1]], len: 24 };
-function musicBox(tStart, tRise, tFull) {                    // tStart：第一个音；tRise：雪景开始收成球；tFull：镜头停稳
-  const c = SND.ctx, out = c.createGain(), dl = c.createDelay(1.5), fb = c.createGain(), lp = c.createBiquadFilter();
-  out.gain.setValueAtTime(0, tStart); out.gain.linearRampToValueAtTime(BOX.quiet, tRise); out.gain.linearRampToValueAtTime(BOX.vol, tFull); out.connect(SND.master);
-  dl.delayTime.value = .46; fb.gain.value = .3; lp.type = 'lowpass'; lp.frequency.value = 2200; out.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(SND.master);   // 一点回声，像在空房间里
-  const ping = (t, midi, vol) => {                           // 一个簧片音：基音 + 两个很快消失的泛音，余音拖得长
-    const f = 440 * Math.pow(2, (midi - 69) / 12), g = c.createGain(); g.connect(out);
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .004); g.gain.exponentialRampToValueAtTime(.0008, t + 3.6);
-    for (const [m, a, d] of [[1, 1, 3.6], [2.01, .3, 1.2], [5.4, .09, .3]]) { const o = c.createOscillator(), og = c.createGain(); o.frequency.value = f * m; og.gain.setValueAtTime(a, t); og.gain.exponentialRampToValueAtTime(.001, t + d); o.connect(og); og.connect(g); o.start(t); o.stop(t + d + .05); }
-  };
-  const beatAt = t => BOX.slow + (BOX.beat - BOX.slow) * sst(tRise - 1, tFull, t);    // 一拍多长：从很慢过渡到正常
-  let i = 0, pos = 0, t = tStart;                            // i：下一个音；pos：它之前那个音的拍位；t：那个音的时刻
-  const tick = () => {
-    const now = c.currentTime;
-    while (t < now + .8) {
-      const [b, m, mel] = BOX.ev[i], db = (b - pos + BOX.len) % BOX.len;
-      t += db * beatAt(t); pos = b;
-      if (t >= now && (mel || t > tRise + 2)) ping(t, m, mel ? .34 : .13);          // 低音等桌子开始浮现才进来
-      i = (i + 1) % BOX.ev.length;
-    }
-  };
-  SND.box = { out, timer: setInterval(tick, 200) }; tick();
+/* 《霜星》八音盒：保留原入场时机，以原生 GainNode 淡入/淡出。 */
+const BOX = { src: 'audio/frost-star.mp3', quiet: .035, vol: .35, fade: 2.5 };
+function musicBox(tStart, tRise, tFull) {
+  stopBox();
+  const c = SND.ctx, out = c.createGain(), source = c.createBufferSource();
+  source.buffer = SND.boxBuf; source.loop = true;
+  out.gain.setValueAtTime(0, tStart);
+  out.gain.linearRampToValueAtTime(BOX.quiet, tRise);
+  out.gain.linearRampToValueAtTime(BOX.vol, tFull);
+  source.connect(out); out.connect(SND.master); source.start(tStart);
+  SND.box = { out, source, stopTimer: null, fading: false };
 }
-function stopBox() { if (SND.box) { clearInterval(SND.box.timer); try { SND.box.out.gain.cancelScheduledValues(0); SND.box.out.gain.value = 0; SND.box.out.disconnect(); } catch (e) {} SND.box = null; } }
+function stopBox(box = SND.box) {
+  if (!box) return;
+  clearTimeout(box.stopTimer);
+  box.out.gain.cancelScheduledValues(0); box.out.gain.value = 0;
+  try { box.source.stop(); } catch (e) {}
+  box.source.disconnect(); box.out.disconnect();
+  if (SND.box === box) SND.box = null;
+}
 function again() {                                           // 重置：回到封面，音乐也从头来
   stopBox(); freeU = null;
   if (SND.main) { try { SND.main.stop(); } catch (e) {} SND.main = null; } if (SND.fallback) SND.fallback.pause();
@@ -983,7 +977,7 @@ function placeEnv() {                                        // 把看不见的�
 }
 function prepToast() {                                       // 镜头到桌前时先把歌备好，点信封时才能立刻响
   if (SND.toast) return; const a = new Audio(TOAST.src); a.preload = 'auto'; a.muted = SND.muted; SND.toast = a; SND.toastOn = false;
-  a.addEventListener('playing', () => { $('credit').textContent = TOAST.credit; const b = SND.box; if (b) { const g = b.out.gain, t = SND.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0, t + 2.5); setTimeout(stopBox, 2700); } });   // 歌真的响了，八音盒才让位
+  a.addEventListener('playing', () => { $('credit').textContent = TOAST.credit; const b = SND.box; if (b && !b.fading) { b.fading = true; const g = b.out.gain, t = SND.ctx.currentTime, volume = g.value; g.cancelScheduledValues(t); g.setValueAtTime(volume, t); g.linearRampToValueAtTime(0, t + BOX.fade); b.source.stop(t + BOX.fade); b.stopTimer = setTimeout(() => stopBox(b), (BOX.fade + .1) * 1000); } });   // 歌真的响了，八音盒才让位
   a.addEventListener('error', () => { SND.toast = null; });
 }
 function openLetter() {
